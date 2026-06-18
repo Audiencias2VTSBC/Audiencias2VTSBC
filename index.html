@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Qualificação de Partes — 2ª VT SBC</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100vh;font-family:'DM Sans',system-ui,sans-serif;background:#f1f5f9}
+button{font-family:inherit;cursor:pointer;transition:opacity .15s,transform .1s}
+button:active{transform:scale(.98)}
+button:disabled{opacity:.6;cursor:not-allowed}
+input,select,textarea{font-family:inherit}
+input:focus,select:focus{outline:2px solid #0f2d5a;outline-offset:1px}
+pre{font-family:inherit}
+@media print{
+  .no-print{display:none!important}
+  body{background:white}
+  .print-card{break-inside:avoid}
+}
+</style>
+</head>
+<body>
+<div id="root"><div style="display:flex;align-items:center;justify-content:center;min-height:100vh;font-size:14px;color:#64748b">Carregando...</div></div>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script type="text/babel">
+const{useState,useEffect,useCallback,useRef}=React;
+
+/* ================================================================
+   ★ CONFIGURAÇÃO — edite estas linhas antes de implantar
+   ================================================================
+   Preencha SUPABASE_URL e SUPABASE_KEY após criar o projeto
+   em https://supabase.com  (veja GUIA_NUVEM.md para o passo a passo).
+   Deixe vazias ("") para usar o modo local (mesmo navegador).
+   ================================================================ */
+const SUPABASE_URL = "https://blpfzachqobdtljzbmgl.supabase.co"
+const SUPABASE_KEY = "sb_publishable_TXOsRY7qlaXznypcUYBNiw_dOwqxtAY"
+
+const CONFIG={
+  vara:  "2ª Vara do Trabalho de São Bernardo do Campo",
+  juiz:  "Alex Moretto Venturin",
+  titulo:"TRT 2ª Região",
+};
+
+/* ================================================================
+   CONSTANTES DE ESTILO
+   ================================================================ */
+const NAVY="#0f2d5a",WHITE="#ffffff",G50="#f8fafc",G100="#f1f5f9",
+      G200="#e2e8f0",G400="#94a3b8",G600="#475569",G800="#1e293b";
+const TODAY=new Date().toISOString().slice(0,10);
+const TODAY_DISPLAY=new Date().toLocaleDateString("pt-BR");
+const LS_KEY=`audiencias:${TODAY}`;
+
+/* ================================================================
+   QUALIDADES E CAMPOS
+   ================================================================ */
+const QUALIDADES=[
+  {id:"reclamante",     label:"Parte Reclamante",          short:"Reclamante",      color:"#1d4ed8",bg:"#dbeafe",border:"#3b82f6"},
+  {id:"reclamado",      label:"Parte Reclamada",           short:"Reclamada",       color:"#b91c1c",bg:"#fee2e2",border:"#ef4444"},
+  {id:"preposto",       label:"Preposto(a)",               short:"Preposto",        color:"#6d28d9",bg:"#ede9fe",border:"#8b5cf6"},
+  {id:"adv_reclamante", label:"Advogado(a) do Reclamante", short:"Adv. Rec.",       color:"#065f46",bg:"#d1fae5",border:"#10b981"},
+  {id:"adv_reclamado",  label:"Advogado(a) da Reclamada",  short:"Adv. Red.",       color:"#92400e",bg:"#fef3c7",border:"#f59e0b"},
+  {id:"test_reclamante",label:"Testemunha do Reclamante",  short:"Test. Rec.",      color:"#0e7490",bg:"#cffafe",border:"#06b6d4"},
+  {id:"test_reclamado", label:"Testemunha da Reclamada",   short:"Test. Red.",      color:"#9d174d",bg:"#fce7f3",border:"#ec4899"},
+];
+
+const FIELDS={
+  reclamante:[
+    {key:"nome",     label:"Nome completo",     required:true},
+    {key:"cpf",      label:"CPF",               required:true, ph:"000.000.000-00"},
+    {key:"rg",       label:"RG",                required:false},
+    {key:"orgao_exp",label:"Órgão exp. / UF",   required:false,ph:"Ex.: SSP/SP"},
+    {key:"profissao",label:"Profissão",          required:false},
+    {key:"endereco", label:"Endereço completo", required:false,ph:"Rua, nº, bairro, cidade/UF"},
+  ],
+  reclamado:[
+    {key:"nome_razao",label:"Nome / Razão social",required:true},
+    {key:"cpf_cnpj", label:"CPF / CNPJ",          required:false},
+    {key:"endereco", label:"Endereço",             required:false},
+  ],
+  preposto:[
+    {key:"nome",   label:"Nome completo",    required:true},
+    {key:"cpf",    label:"CPF",              required:true,ph:"000.000.000-00"},
+    {key:"rg",     label:"RG",              required:false},
+    {key:"cargo",  label:"Cargo na empresa",required:true},
+    {key:"empresa",label:"Empresa",         required:true},
+  ],
+  adv_reclamante:[
+    {key:"nome",    label:"Nome completo",     required:true},
+    {key:"oab",     label:"OAB (UF + número)", required:true,ph:"Ex.: SP 123456"},
+    {key:"cpf",     label:"CPF",               required:false},
+    {key:"email",   label:"E-mail",            required:false,type:"email"},
+    {key:"telefone",label:"Telefone / WhatsApp",required:false},
+  ],
+  adv_reclamado:[
+    {key:"nome",    label:"Nome completo",     required:true},
+    {key:"oab",     label:"OAB (UF + número)", required:true,ph:"Ex.: SP 123456"},
+    {key:"cpf",     label:"CPF",               required:false},
+    {key:"email",   label:"E-mail",            required:false,type:"email"},
+    {key:"telefone",label:"Telefone / WhatsApp",required:false},
+  ],
+  test_reclamante:[
+    {key:"nome",     label:"Nome completo",  required:true},
+    {key:"cpf",      label:"CPF",            required:true,ph:"000.000.000-00"},
+    {key:"rg",       label:"RG",            required:true},
+    {key:"orgao_exp",label:"Órgão exp. / UF",required:false,ph:"Ex.: SSP/SP"},
+    {key:"profissao",label:"Profissão",      required:true},
+    {key:"endereco", label:"Endereço",       required:false},
+  ],
+  test_reclamado:[
+    {key:"nome",     label:"Nome completo",  required:true},
+    {key:"cpf",      label:"CPF",            required:true,ph:"000.000.000-00"},
+    {key:"rg",       label:"RG",            required:true},
+    {key:"orgao_exp",label:"Órgão exp. / UF",required:false,ph:"Ex.: SSP/SP"},
+    {key:"profissao",label:"Profissão",      required:true},
+    {key:"endereco", label:"Endereço",       required:false},
+  ],
+};
+
+/* ================================================================
+   CAMADA DE ARMAZENAMENTO
+   Prioridade: servidor local → Supabase → localStorage
+   ================================================================ */
+let SERVER_MODE=false;
+let CLOUD_MODE=!!(SUPABASE_URL&&SUPABASE_KEY);
+
+async function detectServer(){
+  try{
+    const ctrl=new AbortController();
+    const t=setTimeout(()=>ctrl.abort(),1200);
+    const r=await fetch("/api/health",{signal:ctrl.signal});
+    clearTimeout(t);
+    SERVER_MODE=r.ok;
+  }catch{SERVER_MODE=false;}
+}
+
+function sbHeaders(extra={}){
+  return{"apikey":SUPABASE_KEY,"Authorization":`Bearer ${SUPABASE_KEY}`,"Content-Type":"application/json",...extra};
+}
+
+function getMode(){
+  if(SERVER_MODE)return"server";
+  if(CLOUD_MODE)return"cloud";
+  return"local";
+}
+
+const db={
+  async load(){
+    const mode=getMode();
+    if(mode==="server"){
+      try{const r=await fetch(`/api/submissions?date=${TODAY}`);return r.ok?r.json():[];}
+      catch{return[];}
+    }
+    if(mode==="cloud"){
+      try{
+        const r=await fetch(
+          `${SUPABASE_URL}/rest/v1/submissions?date=eq.${TODAY}&select=*&order=timestamp.asc`,
+          {headers:sbHeaders()}
+        );
+        if(!r.ok)return[];
+        const rows=await r.json();
+        return rows.map(x=>({...x,fields:typeof x.fields==="string"?JSON.parse(x.fields):x.fields}));
+      }catch{return[];}
+    }
+    try{return JSON.parse(localStorage.getItem(LS_KEY)||"[]");}catch{return[];}
+  },
+
+  async add(item){
+    const mode=getMode();
+    const payload={...item,date:TODAY};
+    if(mode==="server"){
+      try{await fetch("/api/submissions",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});}
+      catch{}
+      return;
+    }
+    if(mode==="cloud"){
+      try{
+        await fetch(`${SUPABASE_URL}/rest/v1/submissions`,{
+          method:"POST",
+          headers:sbHeaders({"Prefer":"return=minimal"}),
+          body:JSON.stringify({...payload,fields:JSON.stringify(payload.fields)}),
+        });
+      }catch{}
+      return;
+    }
+    const l=await this.load();l.push(payload);
+    localStorage.setItem(LS_KEY,JSON.stringify(l));
+  },
+
+  async setStatus(id,status){
+    const mode=getMode();
+    if(mode==="server"){
+      try{await fetch(`/api/submissions/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status})});}
+      catch{}
+      return this.load();
+    }
+    if(mode==="cloud"){
+      try{
+        await fetch(`${SUPABASE_URL}/rest/v1/submissions?id=eq.${id}`,{
+          method:"PATCH",headers:sbHeaders(),body:JSON.stringify({status}),
+        });
+      }catch{}
+      return this.load();
+    }
+    const l=await this.load();
+    const i=l.findIndex(x=>x.id===id);
+    if(i>=0)l[i].status=status;
+    localStorage.setItem(LS_KEY,JSON.stringify(l));
+    return l;
+  },
+
+  async clear(){
+    const mode=getMode();
+    if(mode==="server"){
+      try{await fetch(`/api/submissions?date=${TODAY}`,{method:"DELETE"});}catch{}
+      return;
+    }
+    if(mode==="cloud"){
+      try{await fetch(`${SUPABASE_URL}/rest/v1/submissions?date=eq.${TODAY}`,{method:"DELETE",headers:sbHeaders()});}
+      catch{}
+      return;
+    }
+    localStorage.removeItem(LS_KEY);
+  },
+};
+
+/* ================================================================
+   UTILITÁRIOS
+   ================================================================ */
+function genId(){return Date.now().toString(36)+Math.random().toString(36).slice(2);}
+function nowTime(){return new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});}
+function fv(sub,key){return sub?.fields?.[key]||"";}
+
+function generateQualText(processo,subs){
+  const s=subs.filter(x=>x.processo===processo);
+  const lines=[];
+  const all=(id)=>s.filter(x=>x.qualidade===id);
+  all("reclamante").forEach(sub=>{
+    const rg=fv(sub,"rg")?`, portador/a do RG ${fv(sub,"rg")}${fv(sub,"orgao_exp")?" ("+fv(sub,"orgao_exp")+")":""}`:""
+    const cpf=fv(sub,"cpf")?" e CPF "+fv(sub,"cpf"):""
+    const prof=fv(sub,"profissao")?", "+fv(sub,"profissao"):""
+    const end=fv(sub,"endereco")?", residente em "+fv(sub,"endereco"):""
+    lines.push(`PARTE RECLAMANTE: ${fv(sub,"nome")}${prof}${rg}${cpf}${end}.`);
+  });
+  all("reclamado").forEach(sub=>{
+    const cnpj=fv(sub,"cpf_cnpj")?`, inscrita(o) no CPF/CNPJ ${fv(sub,"cpf_cnpj")}`:""
+    const end=fv(sub,"endereco")?", com sede/domicílio em "+fv(sub,"endereco"):""
+    lines.push(`PARTE RECLAMADA: ${fv(sub,"nome_razao")}${cnpj}${end}.`);
+  });
+  all("preposto").forEach(sub=>{
+    const cpf=fv(sub,"cpf")?", portador/a do CPF "+fv(sub,"cpf"):""
+    const cargo=fv(sub,"cargo")?", exercendo o cargo de "+fv(sub,"cargo"):""
+    lines.push(`PREPOSTO(A): ${fv(sub,"nome")}${cpf}${cargo}, representando ${fv(sub,"empresa")}.`);
+  });
+  all("adv_reclamante").forEach(sub=>{
+    const oab=fv(sub,"oab")?`, OAB/${fv(sub,"oab")}`:""
+    lines.push(`ADVOGADO(A) DO RECLAMANTE: ${fv(sub,"nome")}${oab}.`);
+  });
+  all("adv_reclamado").forEach(sub=>{
+    const oab=fv(sub,"oab")?`, OAB/${fv(sub,"oab")}`:""
+    lines.push(`ADVOGADO(A) DA RECLAMADA: ${fv(sub,"nome")}${oab}.`);
+  });
+  all("test_reclamante").forEach(sub=>{
+    const rg=fv(sub,"rg")?`, portador/a do RG ${fv(sub,"rg")}${fv(sub,"orgao_exp")?" ("+fv(sub,"orgao_exp")+")":""}`:""
+    const cpf=fv(sub,"cpf")?" e CPF "+fv(sub,"cpf"):""
+    const prof=fv(sub,"profissao")?", "+fv(sub,"profissao"):""
+    lines.push(`TESTEMUNHA DO RECLAMANTE: ${fv(sub,"nome")}${prof}${rg}${cpf}.`);
+  });
+  all("test_reclamado").forEach(sub=>{
+    const rg=fv(sub,"rg")?`, portador/a do RG ${fv(sub,"rg")}${fv(sub,"orgao_exp")?" ("+fv(sub,"orgao_exp")+")":""}`:""
+    const cpf=fv(sub,"cpf")?" e CPF "+fv(sub,"cpf"):""
+    const prof=fv(sub,"profissao")?", "+fv(sub,"profissao"):""
+    lines.push(`TESTEMUNHA DA RECLAMADA: ${fv(sub,"nome")}${prof}${rg}${cpf}.`);
+  });
+  return lines.join("\n\n")||"Nenhum registro para este processo.";
+}
+
+/* ================================================================
+   BADGE DE QUALIDADE
+   ================================================================ */
+function Badge({id}){
+  const q=QUALIDADES.find(x=>x.id===id)||{short:id,color:G600,bg:G100};
+  return <span style={{fontSize:11,fontWeight:700,padding:"3px 8px",borderRadius:12,
+    color:q.color,background:q.bg,whiteSpace:"nowrap"}}>{q.short}</span>;
+}
+
+/* ================================================================
+   VISÃO: FORMULÁRIO
+   ================================================================ */
+function FormView(){
+  const[step,setStep]=useState(1);
+  const[processo,setProcesso]=useState("");
+  const[qual,setQual]=useState(null);
+  const[vals,setVals]=useState({});
+  const[errs,setErrs]=useState({});
+  const[accepted,setAccepted]=useState(false);
+  const[done,setDone]=useState(false);
+  const[busy,setBusy]=useState(false);
+
+  const qc=qual?QUALIDADES.find(q=>q.id===qual):null;
+  const flds=qual?FIELDS[qual]:[];
+
+  const S={
+    wrap:{minHeight:"100vh",background:G100,display:"flex",flexDirection:"column",alignItems:"center",padding:"16px 12px"},
+    card:{background:WHITE,borderRadius:16,padding:24,width:"100%",maxWidth:480,boxShadow:"0 2px 8px rgba(0,0,0,.08)"},
+    inp:{width:"100%",padding:"10px 12px",borderRadius:8,border:`1.5px solid ${G200}`,fontSize:15,color:G800,background:WHITE,display:"block"},
+    inpErr:{borderColor:"#ef4444"},
+    lbl:{display:"block",fontSize:13,fontWeight:600,color:G600,marginBottom:6},
+    err:{fontSize:12,color:"#ef4444",marginTop:4},
+    btnP:{display:"block",width:"100%",padding:13,background:NAVY,color:WHITE,border:"none",borderRadius:10,fontSize:15,fontWeight:600,marginTop:12},
+    btnB:{padding:"13px 18px",background:G100,color:G600,border:"none",borderRadius:10,fontSize:15,fontWeight:600},
+  };
+
+  const go1=()=>{
+    if(!accepted){setErrs({p:"Aceite o aviso de privacidade."});return;}
+    if(!processo.trim()){setErrs({p:"Informe o número do processo."});return;}
+    setErrs({});setStep(2);
+  };
+  const go2=()=>{
+    if(!qual){setErrs({q:"Selecione sua qualidade processual."});return;}
+    setErrs({});setStep(3);
+  };
+  const submit=async()=>{
+    const e={};
+    flds.forEach(fi=>{if(fi.required&&!vals[fi.key]?.trim())e[fi.key]="Campo obrigatório";});
+    if(Object.keys(e).length){setErrs(e);return;}
+    setBusy(true);
+    try{
+      await db.add({id:genId(),timestamp:nowTime(),processo:processo.trim(),qualidade:qual,fields:{...vals},status:"aguardando"});
+      setDone(true);
+    }catch{setErrs({s:"Erro ao enviar. Tente novamente."});}
+    setBusy(false);
+  };
+  const reset=()=>{setStep(1);setProcesso("");setQual(null);setVals({});setDone(false);setErrs({});setAccepted(false);};
+
+  if(done)return(
+    <div style={S.wrap}>
+      <div style={{...S.card,textAlign:"center",marginTop:32}}>
+        <div style={{width:64,height:64,borderRadius:"50%",background:"#d1fae5",color:"#065f46",fontSize:28,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}>✓</div>
+        <h2 style={{fontSize:20,fontWeight:700,color:G800,marginBottom:12}}>Dados enviados!</h2>
+        <p style={{fontSize:14,color:G600,lineHeight:1.7,marginBottom:8}}>Suas informações foram registradas. O secretário de audiências já recebeu seus dados.</p>
+        <p style={{fontSize:13,color:G400,marginBottom:28}}>Aguarde ser chamado(a).</p>
+        <button onClick={reset} style={{...S.btnP,background:G100,color:NAVY,border:`1.5px solid ${NAVY}`}}>Registrar outra pessoa</button>
+      </div>
+    </div>
+  );
+
+  return(
+    <div style={S.wrap}>
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:24,marginTop:8}}>
+        <div style={{background:NAVY,color:WHITE,fontWeight:700,fontSize:15,width:44,height:44,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>TRT</div>
+        <div>
+          <div style={{fontWeight:700,fontSize:14,color:NAVY}}>{CONFIG.vara}</div>
+          <div style={{fontSize:12,color:G400}}>{CONFIG.titulo}</div>
+        </div>
+      </div>
+
+      <div style={{display:"flex",alignItems:"center",marginBottom:24,gap:0}}>
+        {[1,2,3].map(s=>(
+          <React.Fragment key={s}>
+            <div style={{width:30,height:30,borderRadius:"50%",background:step>=s?NAVY:G200,color:step>=s?WHITE:G400,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:600,flexShrink:0}}>{s}</div>
+            {s<3&&<div style={{width:36,height:2,background:step>s?NAVY:G200}}/>}
+          </React.Fragment>
+        ))}
+      </div>
+
+      {step===1&&(
+        <div style={S.card}>
+          <h2 style={{fontSize:17,fontWeight:700,color:G800,marginBottom:16}}>Identificação do processo</h2>
+          <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:8,padding:12,marginBottom:20}}>
+            <p style={{fontSize:12,color:"#1e40af",lineHeight:1.6,marginBottom:10}}>
+              <strong>Aviso de privacidade (LGPD):</strong> Os dados coletados neste formulário são utilizados exclusivamente para fins processuais, com fundamento no art. 7º, II, da Lei 13.709/2018. As informações serão tratadas somente no âmbito desta audiência trabalhista e não serão compartilhadas além do necessário.
+            </p>
+            <label style={{display:"flex",alignItems:"flex-start",gap:8,cursor:"pointer",fontSize:13,color:G800}}>
+              <input type="checkbox" checked={accepted} onChange={e=>{setAccepted(e.target.checked);setErrs({});}} style={{marginTop:2,accentColor:NAVY,width:16,height:16}}/>
+              <span>Li e aceito o aviso de privacidade</span>
+            </label>
+          </div>
+          <label style={S.lbl}>Número do processo *</label>
+          <input style={{...S.inp,...(errs.p?S.inpErr:{})}} value={processo} onChange={e=>{setProcesso(e.target.value);setErrs({});}} placeholder="0000000-00.0000.5.02.0000"/>
+          {errs.p&&<p style={S.err}>{errs.p}</p>}
+          <button onClick={go1} style={S.btnP}>Continuar →</button>
+        </div>
+      )}
+
+      {step===2&&(
+        <div style={S.card}>
+          <h2 style={{fontSize:17,fontWeight:700,color:G800,marginBottom:4}}>Qual é a sua qualidade processual?</h2>
+          <p style={{fontSize:12,color:G400,marginBottom:16}}>Processo: <strong style={{color:G600}}>{processo}</strong></p>
+          <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:12}}>
+            {QUALIDADES.map(q=>(
+              <button key={q.id} onClick={()=>{setQual(q.id);setErrs({});}}
+                style={{padding:"12px 16px",borderRadius:8,border:`1.5px solid ${qual===q.id?q.border:G200}`,
+                  background:qual===q.id?q.bg:WHITE,color:qual===q.id?q.color:G800,
+                  fontSize:14,fontWeight:500,textAlign:"left",transition:"all .15s"}}>
+                {q.label}
+              </button>
+            ))}
+          </div>
+          {errs.q&&<p style={S.err}>{errs.q}</p>}
+          <div style={{display:"flex",gap:8,marginTop:8}}>
+            <button onClick={()=>setStep(1)} style={S.btnB}>← Voltar</button>
+            <button onClick={go2} style={{...S.btnP,flex:1,marginTop:0}}>Continuar →</button>
+          </div>
+        </div>
+      )}
+
+      {step===3&&qc&&(
+        <div style={S.card}>
+          <span style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:12,color:qc.color,background:qc.bg,display:"inline-block",marginBottom:10}}>{qc.label}</span>
+          <h2 style={{fontSize:17,fontWeight:700,color:G800,marginBottom:4}}>Preencha seus dados</h2>
+          <p style={{fontSize:12,color:G400,marginBottom:16}}>Processo: <strong style={{color:G600}}>{processo}</strong></p>
+          {flds.map(fi=>(
+            <div key={fi.key} style={{marginBottom:14}}>
+              <label style={S.lbl}>{fi.label}{fi.required&&<span style={{color:"#b91c1c"}}> *</span>}</label>
+              <input style={{...S.inp,...(errs[fi.key]?S.inpErr:{})}} type={fi.type||"text"}
+                value={vals[fi.key]||""} placeholder={fi.ph||""}
+                onChange={e=>{setVals(p=>({...p,[fi.key]:e.target.value}));setErrs(p=>{const n={...p};delete n[fi.key];return n;});}}/>
+              {errs[fi.key]&&<p style={S.err}>{errs[fi.key]}</p>}
+            </div>
+          ))}
+          {errs.s&&<p style={S.err}>{errs.s}</p>}
+          <div style={{display:"flex",gap:8,marginTop:8}}>
+            <button onClick={()=>setStep(2)} style={S.btnB}>← Voltar</button>
+            <button onClick={submit} disabled={busy}
+              style={{...S.btnP,flex:1,marginTop:0}}>{busy?"Enviando...":"Enviar dados ✓"}</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ================================================================
+   BADGE DE MODO (canto superior do painel)
+   ================================================================ */
+function ModeBadge({mode}){
+  const cfg={
+    cloud:  {label:"☁ modo nuvem",   bg:"rgba(52,211,153,.2)",  color:"#34d399"},
+    server: {label:"⚙ servidor local",bg:"rgba(96,165,250,.2)",  color:"#60a5fa"},
+    local:  {label:"⚠ modo local",   bg:"rgba(251,191,36,.2)",  color:"#fbbf24"},
+  };
+  const c=cfg[mode]||cfg.local;
+  return <span style={{fontSize:10,background:c.bg,color:c.color,padding:"2px 8px",borderRadius:10,fontWeight:600,whiteSpace:"nowrap"}}>{c.label}</span>;
+}
+
+/* ================================================================
+   VISÃO: PAINEL DO SECRETÁRIO
+   ================================================================ */
+function DashboardView({mode}){
+  const[subs,setSubs]=useState([]);
+  const[filter,setFilter]=useState("");
+  const[loading,setLoading]=useState(true);
+  const[lastUp,setLastUp]=useState("");
+  const[expanded,setExpanded]=useState({});
+  const[qualTexts,setQualTexts]=useState({});
+  const[copied,setCopied]=useState({});
+  const[qrUrl,setQrUrl]=useState("");
+  const timerRef=useRef(null);
+
+  const refresh=useCallback(async()=>{
+    const list=await db.load();
+    setSubs(list);
+    setLastUp(nowTime());
+  },[]);
+
+  useEffect(()=>{
+    try{
+      const base=window.location.href.split("?")[0];
+      const formUrl=`${base}?view=form`;
+      setQrUrl(`https://api.qrserver.com/v1/create-qr-code/?size=168x168&bgcolor=ffffff&color=0f2d5a&data=${encodeURIComponent(formUrl)}`);
+    }catch{}
+    refresh().finally(()=>setLoading(false));
+    timerRef.current=setInterval(refresh,30000);
+    return()=>clearInterval(timerRef.current);
+  },[refresh]);
+
+  const handleStatus=async(id,status)=>{
+    const updated=await db.setStatus(id,status);
+    setSubs(updated);
+  };
+  const handleClear=async()=>{
+    if(!confirm("Limpar todos os registros de hoje?"))return;
+    await db.clear();
+    setSubs([]);setExpanded({});setQualTexts({});
+  };
+  const toggleQual=(proc)=>{
+    if(!expanded[proc])setQualTexts(p=>({...p,[proc]:generateQualText(proc,subs)}));
+    setExpanded(p=>({...p,[proc]:!p[proc]}));
+  };
+  const copyText=async(proc)=>{
+    try{
+      await navigator.clipboard.writeText(qualTexts[proc]||"");
+      setCopied(p=>({...p,[proc]:true}));
+      setTimeout(()=>setCopied(p=>({...p,[proc]:false})),2000);
+    }catch{}
+  };
+
+  const processos=[...new Set(subs.map(s=>s.processo))].sort();
+  const filtered=filter?subs.filter(s=>s.processo===filter):subs;
+  const grouped=filtered.reduce((acc,s)=>{(acc[s.processo]=acc[s.processo]||[]).push(s);return acc},{});
+
+  const SBTN=(bg)=>({padding:"6px 12px",background:bg,color:WHITE,border:"none",borderRadius:6,fontSize:12,fontWeight:600});
+  const STATBTN=(s,sub)=>{
+    const map={presente:{bg:"#d1fae5",c:"#065f46"},ausente:{bg:"#fee2e2",c:"#991b1b"},aguardando:{bg:"#fef3c7",c:"#92400e"}};
+    const active=sub.status===s;
+    return{flex:s==="aguardando"?0:1,padding:"5px 6px",border:`1px solid ${G200}`,borderRadius:6,
+      fontSize:11,fontWeight:600,cursor:"pointer",
+      background:active?map[s].bg:G50,color:active?map[s].c:G600};
+  };
+
+  return(
+    <div style={{minHeight:"100vh",background:G50,display:"flex",flexDirection:"column"}}>
+      <div style={{background:NAVY,color:WHITE,padding:"11px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}} className="no-print">
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <span style={{background:"rgba(255,255,255,.15)",padding:"3px 10px",borderRadius:6,fontWeight:700,fontSize:14}}>TRT</span>
+          <div>
+            <div style={{fontWeight:700,fontSize:14}}>Painel do Secretário</div>
+            <div style={{fontSize:11,opacity:.65}}>{CONFIG.vara} · {TODAY_DISPLAY}</div>
+          </div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+          <ModeBadge mode={mode}/>
+          {lastUp&&<span style={{fontSize:11,opacity:.5}}>Atualizado: {lastUp}</span>}
+          <button onClick={refresh} style={SBTN("rgba(255,255,255,.12)")}>↻ Atualizar</button>
+          <button onClick={()=>window.print()} style={SBTN("rgba(255,255,255,.12)")}>🖨 Imprimir</button>
+          <button onClick={handleClear} style={SBTN("#991b1b")}>✕ Limpar dia</button>
+        </div>
+      </div>
+
+      {mode==="local"&&(
+        <div style={{background:"#fffbeb",borderBottom:"1px solid #fde68a",padding:"8px 20px"}} className="no-print">
+          <span style={{fontSize:13,color:"#92400e",lineHeight:1.5}}>
+            <strong>Modo local ativo:</strong> dados salvos apenas neste navegador. Para uso em rede com celulares próprios das partes, configure o Supabase ou o Glitch (ver <em>GUIA_NUVEM.md</em>).
+          </span>
+        </div>
+      )}
+
+      <div style={{display:"flex",flex:1,minHeight:0}}>
+        <div style={{width:228,minWidth:228,padding:14,display:"flex",flexDirection:"column",gap:12,borderRight:`1px solid ${G200}`,background:WHITE}} className="no-print">
+          <div style={{background:G50,borderRadius:10,padding:14,border:`1px solid ${G200}`,textAlign:"center"}}>
+            <div style={{fontSize:11,fontWeight:600,color:G600,marginBottom:10}}>QR Code — Sala de Espera</div>
+            {qrUrl
+              ?<img src={qrUrl} alt="QR Code para o formulário" style={{width:154,height:154,borderRadius:6,display:"block",margin:"0 auto"}}/>
+              :<div style={{width:154,height:154,background:G100,borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:G400,margin:"0 auto"}}>Gerando...</div>
+            }
+            <div style={{fontSize:10,color:G400,marginTop:8,lineHeight:1.5}}>Afixe na sala de espera<br/>Partes escaneiam com o celular</div>
+          </div>
+
+          <div style={{background:G50,borderRadius:10,padding:12,border:`1px solid ${G200}`}}>
+            <div style={{fontSize:11,fontWeight:700,color:G600,marginBottom:8,textTransform:"uppercase",letterSpacing:.5}}>Resumo do dia</div>
+            {[["Total",subs.length,G800],["Presentes",subs.filter(s=>s.status==="presente").length,"#065f46"],
+              ["Aguardando",subs.filter(s=>s.status==="aguardando").length,"#92400e"],
+              ["Ausentes",subs.filter(s=>s.status==="ausente").length,"#b91c1c"]
+            ].map(([label,val,clr])=>(
+              <div key={label} style={{display:"flex",justifyContent:"space-between",fontSize:13,color:G600,padding:"3px 0"}}>
+                <span>{label}</span><strong style={{color:clr}}>{val}</strong>
+              </div>
+            ))}
+          </div>
+
+          <div style={{background:G50,borderRadius:10,padding:12,border:`1px solid ${G200}`}}>
+            <label style={{fontSize:11,fontWeight:600,color:G600,display:"block",marginBottom:8}}>Filtrar processo</label>
+            <select value={filter} onChange={e=>setFilter(e.target.value)} style={{width:"100%",padding:"8px",borderRadius:6,border:`1px solid ${G200}`,fontSize:12,color:G800,background:WHITE}}>
+              <option value="">Todos os processos</option>
+              {processos.map(p=><option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div style={{flex:1,padding:20,overflowY:"auto"}}>
+          {loading?(
+            <div style={{textAlign:"center",padding:60,color:G400,fontSize:14}}>Carregando registros...</div>
+          ):Object.keys(grouped).length===0?(
+            <div style={{textAlign:"center",padding:60,color:G400}}>
+              <div style={{fontSize:48,marginBottom:12}}>📋</div>
+              <p style={{fontSize:15,marginBottom:8}}>Nenhum registro ainda.</p>
+              <p style={{fontSize:13}}>As partes devem escanear o QR Code na sala de espera.</p>
+            </div>
+          ):Object.entries(grouped).map(([proc,list])=>(
+            <div key={proc} style={{marginBottom:28}} className="print-card">
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,paddingBottom:8,borderBottom:`2px solid ${NAVY}`}}>
+                <span style={{fontSize:13,fontWeight:700,color:NAVY}}>Processo: {proc}</span>
+                <div style={{display:"flex",gap:8,alignItems:"center"}} className="no-print">
+                  <span style={{fontSize:12,color:G400}}>{list.length} registro(s)</span>
+                  <button onClick={()=>toggleQual(proc)} style={{padding:"4px 12px",background:expanded[proc]?"#1a3d70":NAVY,color:WHITE,border:"none",borderRadius:6,fontSize:12,fontWeight:600}}>
+                    {expanded[proc]?"▲ Fechar":"📝 Gerar qualificação"}
+                  </button>
+                </div>
+              </div>
+
+              {expanded[proc]&&(
+                <div style={{background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:10,padding:16,marginBottom:12}} className="no-print">
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                    <span style={{fontSize:12,fontWeight:700,color:"#0369a1"}}>Texto para a ata — copie e cole</span>
+                    <button onClick={()=>copyText(proc)} style={{padding:"4px 14px",background:copied[proc]?"#d1fae5":"#0369a1",color:copied[proc]?"#065f46":WHITE,border:"none",borderRadius:6,fontSize:12,fontWeight:600,transition:"all .2s"}}>
+                      {copied[proc]?"✓ Copiado!":"📋 Copiar"}
+                    </button>
+                  </div>
+                  <pre style={{fontSize:12,color:G800,lineHeight:1.8,whiteSpace:"pre-wrap",fontFamily:"inherit",margin:0,background:WHITE,padding:12,borderRadius:6,border:`1px solid ${G200}`}}>
+                    {qualTexts[proc]||generateQualText(proc,subs)}
+                  </pre>
+                </div>
+              )}
+
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(252px,1fr))",gap:10}}>
+                {list.map(sub=>{
+                  const qc=QUALIDADES.find(q=>q.id===sub.qualidade)||{border:"#ccc"};
+                  return(
+                    <div key={sub.id} style={{background:WHITE,borderRadius:10,padding:14,borderLeft:`4px solid ${qc.border}`,boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                        <Badge id={sub.qualidade}/>
+                        <span style={{fontSize:11,color:G400}}>{sub.timestamp}</span>
+                      </div>
+                      <div style={{marginBottom:10}}>
+                        {Object.entries(sub.fields||{}).filter(([,v])=>v).map(([k,v])=>{
+                          const fd=(FIELDS[sub.qualidade]||[]).find(x=>x.key===k);
+                          return(
+                            <div key={k} style={{display:"flex",gap:4,fontSize:12,marginBottom:3,flexWrap:"wrap"}}>
+                              <span style={{color:G400,fontWeight:500}}>{fd?.label||k}:</span>
+                              <span style={{color:G800,fontWeight:600}}>{v}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div style={{display:"flex",gap:5}} className="no-print">
+                        {["presente","ausente","aguardando"].map(s=>(
+                          <button key={s} onClick={()=>handleStatus(sub.id,s)} style={STATBTN(s,sub)}>
+                            {s==="presente"?"✓ Presente":s==="ausente"?"✗ Ausente":"⏳"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================
+   APP — detecção de modo e roteamento
+   ================================================================ */
+function App(){
+  const[view,setView]=useState("loading");
+  const[mode,setMode]=useState("local");
+
+  useEffect(()=>{
+    (async()=>{
+      await detectServer();
+      if(SERVER_MODE)setMode("server");
+      else if(CLOUD_MODE)setMode("cloud");
+      else setMode("local");
+      try{
+        const p=new URLSearchParams(window.location.search);
+        setView(p.get("view")==="form"?"form":"dashboard");
+      }catch{setView("dashboard");}
+    })();
+  },[]);
+
+  if(view==="loading")return(
+    <div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh",background:G50}}>
+      <div style={{textAlign:"center",color:G400}}>
+        <div style={{fontSize:32,marginBottom:12}}>⚖</div>
+        <p style={{fontSize:14}}>Iniciando sistema...</p>
+      </div>
+    </div>
+  );
+
+  return view==="form"?<FormView/>:<DashboardView mode={mode}/>;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
